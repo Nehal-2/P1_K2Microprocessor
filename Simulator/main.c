@@ -28,6 +28,11 @@ typedef struct {
 } ALUOut;
 
 typedef struct {
+	bool J, C, D1, D0, Sreg;
+	unsigned char S;
+} ControlSignals;
+
+typedef struct {
 	bool EnA, EnB, EnO;
 } EnableSignals;
 
