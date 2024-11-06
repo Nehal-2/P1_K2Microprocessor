@@ -6,30 +6,14 @@
 unsigned char IM[MEMORY_SIZE]; // Instruction memory
 unsigned char *PC; // Program counter
 
-/* // Control signals:
-bool J = 0;
-bool C = 0;
-bool D1 = 0;
-bool D0 = 0;
-bool Sreg = 0;
-unsigned char S = 0;
-bool EnA = 0;
-bool EnB = 0;
-bool EnO = 0;
-
-unsigned char imm = 0;
-unsigned char RA = 0;
-unsigned char RB = 0;
-unsigned char RO = 0;
-*/
 typedef struct {
 	unsigned char sum;
 	bool carry;
 } ALUOut;
 
 typedef struct {
-	bool J, C, D1, D0, Sreg;
-	unsigned char S, imm;
+	bool J, C, D1, D0, Sreg, S;
+	unsigned char imm;
 } ControlSignals;
 
 typedef struct {
@@ -42,12 +26,12 @@ typedef struct {
 
 // Functions' declarations:
 void loadToIM(const char *binFile);
-unsigned char fetch();
-void decodeInstr(unsigned char instr);
+unsigned char fetch(ControlSignals *control, Registers *regs);
+void decodeInstr(unsigned char instr, ControlSignals *control);
 EnableSignals demux(bool D1, bool D0);
 ALUOut ALU(unsigned char A, unsigned char B);
 int mux(int A, int B, bool Sreg);
-void execute();
+void execute(ControlSignals *control, Registers *regs);
 
 int main() {
 	FILE *testBinFile;
@@ -59,27 +43,32 @@ int main() {
 		return 1;
 	}
 	
-	unsigned char byte1 = 0b00000000;
-    	unsigned char byte2 = 0b00010000;
+	unsigned char bytes[] = {0b00001000, 0b00011001, 0b00100000, 
+	0b00010000, 0b01110000, 0b00000000, 0b00010100, 0b00000100,
+	0b10110010};
 
-    	fwrite(&byte1, sizeof(unsigned char), 1, testBinFile);
-    	fwrite(&byte2, sizeof(unsigned char), 1, testBinFile);
-    	fclose(testBinFile);
+    	fwrite(bytes, sizeof(unsigned char), 9, testBinFile);
+ 	fclose(testBinFile);
 	// End of writing bin file
-
 	loadToIM("testBinFile.bin");
+	//loadToIM("/home/it/P1/fibonacci.bin");
 	PC = IM;
+
+	ControlSignals control = {0};
+	Registers regs = {0};
 
 	for (int i = 0; i < MEMORY_SIZE; i++) {
 		unsigned char currentInstr = *PC;
-		decodeInstr(currentInstr);
+		decodeInstr(currentInstr, &control);
+		fetch(&control, &regs);
 		PC++;
-		//printf("Instruction %d: 0x%02X\n", i, IM[i]);
+		printf("Instruction %d: 0x%02X\n", i, IM[i]);
     	}	
 	
 	return 0;
 }
 
+//Functions' definitions:
 void loadToIM(const char *binFile) {
 	FILE *file = fopen(binFile, "rb");
 	if (file == NULL) {
@@ -91,26 +80,28 @@ void loadToIM(const char *binFile) {
 	unsigned char chByte;
 
 	while (fread(&chByte, sizeof(unsigned char), 1, file) == 1 
-	&& i < MEMORY_SIZE) { 
-		for (int iBit = 0; iBit < 8; iBit++) {
-			if ((chByte >> (7 - iBit)) & 1) {
-				IM[i] = (IM[i] >> 1) | 0x80;
-			} else {
-				IM[i] = IM[i] >> 1;
-			}
-		}	
+	&& i < MEMORY_SIZE) {
+		IM[i] = chByte;
 		i++;
 	}
+
+/*
+		for (int iBit = 0; iBit < 8; iBit++) {
+			IM[i] <<= 1; // Shift left by 1 to make room for the new bit
+			if ((chByte >> (7 - iBit)) & 1) { // Check if the current bit is 1
+				IM[i] |= 0x01; // Set the LSB of IM[i] to 1
+			} 
+		}	*/
 	fclose(file);
 }
 
-unsigned char fetch() {
+unsigned char fetch(ControlSignals *control, Registers *regs) {
 	unsigned char instr = *PC;
 
-	if (J) {
-		PC = IM + imm;
-	} else if (J && C) {
-		PC = IM + imm;
+	if (control->J) {
+		PC = IM + control->imm;
+	} else if (control->C && control->D1 && control->D0) {
+		PC = IM + control->imm;
 	} else {
 		PC++;
 	}
@@ -118,19 +109,29 @@ unsigned char fetch() {
 	return instr;
 }
 	
-void decodeInstr(unsigned char instr) {
+void decodeInstr(unsigned char instr, ControlSignals *control) {
+	control->J = (instr & 0x80) ? 1 : 0;
+	control->C = (instr & 0x40) ? 1 : 0;
+	control->D1 = (instr & 0x20) ? 1 : 0;
+	control->D0 = (instr & 0x10) ? 1 : 0;
+	control->Sreg = (instr & 0x08) ? 1 : 0;
 
-	J = (instr & 0x80) ? 1 : 0;
-	C = (instr & 0x40) ? 1 : 0;
-	D1 = (instr & 0x20) ? 1 : 0;
-	D0 = (instr & 0x10) ? 1 : 0;
-	Sreg = (instr & 0x08) ? 1 : 0;
+	control->imm = 0; // Clear imm at the beginning of each instruction
 
-	// S is custom input (3 bits: 2, 1, and 0)
-	S = instr & 0x07;
+	// Check if the instruction requires the 6th bit as S-flag or imm[2]
+	if (control->Sreg) { // If Sreg = 1, treat the 6th bit as the S flag
+		control->S = (instr & 0x20) ? 1 : 0;
+		control->imm |= ((instr & 0x10) >> 4);
+	} else { // If Sreg != 1, treat the 6th bit as imm[2]
+		control->imm |= ((instr & 0x20) >> 5); // Combine the last 3 bits with 6th bit as imm[2]
+		control->imm |= ((instr & 0x10) >> 4);
+		control->imm |= ((instr & 0x08) >> 3);
+	}
+
 	printf("Control Signals:\n");
-    	printf("J: %d, C: %d, D1: %d, D0: %d, Sreg: %d, S: 0x%X\n",
-           J, C, D1, D0, Sreg, S);
+    	printf("J: %d, C: %d, D1: %d, D0: %d, Sreg: %d, S: %d, Imm:%d\n",
+          control->J, control->C, control->D1, control->D0, control->Sreg, 
+	  control->S, control->imm);
 }
 
 EnableSignals demux(bool D1, bool D0) {
@@ -144,50 +145,9 @@ EnableSignals demux(bool D1, bool D0) {
 
 ALUOut ALU(unsigned char RA, unsigned char RB) {
 	ALUOut output;
-	unsigned short result = 0;
-	int op = 0; 
-	switch (op) {
-		case 0: //RA = RA + RB
-			result = RA + RB;
-			output.sum = result & 0xFF; // Mask to 8 bits
-			output.carry = (result >> 8) & 0x1; // Move carry to be the 9th bit
-			break;
-		case 1: // RB = RA + RB
-			result = RA + RB;
-			output.sum = result & 0xFF; // Mask to 8 bits
-			output.carry = (result >> 8) & 0x1; // Move carry to be the 9th bit
-			break;
-		case 2: // RA = RA - RB
-			result = RA - RB;
-			output.sum = result & 0xFF; // Mask to 8 bits
-			output.carry = (result > RA) ? 1 : 0;
-			break; 
-		case 3: // RB = RA - RB
-			result = RA - RB;
-			output.sum = result & 0xFF; // Mask to 8 bits
-			output.carry = (result > RA) ? 1 : 0;
-			break;
-		case 4: // RO = RA
-			output.sum = RA;
-			output.carry = 0;
-			break;
-		case 5: // RA = imm
-			output.sum = imm;
-			output.carry = 0;
-			break;
-		case 6: // RB = imm
-			output.sum = imm;
-			output.carry = 0;
-			break;
-		case 7: // JC = imm
-			output.sum = 0;
-			output.carry = 0;
-			break;
-		case 8: // J = imm
-			output.sum = 0;
-			output.carry = 0;
-			break;
-	}
+	unsigned short result = RA + RB;
+	output.sum = result & 0xFF; // Mask to 8 bits
+	output.carry = (result >> 8) & 0x1; // Extract carry
 
 		return output;
 }
@@ -196,26 +156,26 @@ int mux(int A, int B, bool Sreg) {
 	return Sreg ? B : A;
 }
 
-void execute() {
-	unsigned char temp = mux(ALU(RA, RB).sum, imm, Sreg);
-	EnableSignals enSignals = demux(D1, D0);
+void execute(ControlSignals *control, Registers *regs) {
+	unsigned char temp = mux(ALU(regs->RA, regs->RB).sum, control->imm, control->Sreg);
+	EnableSignals enSignals = demux(control->D1, control->D0);
 	
 	// Update registers:
 	if (enSignals.EnA) {
-		RA = temp;
-		printf("0x%X is loaded into RA\n", RA);
+		regs->RA = temp;
+		printf("0x%X is loaded into RA\n", regs->RA);
 	}
 	if (enSignals.EnB) {
-		RB = temp;
-		printf("0x%X is loaded into RB\n", RB);
+		regs->RB = temp;
+		printf("0x%X is loaded into RB\n", regs->RB);
 	}
 	if (enSignals.EnO) {
-		RO = RA;
-		printf("0x%X is loaded into RO)\n", RO);
+		regs->RO = regs->RA;
+		printf("0x%X is loaded into RO)\n", regs->RO);
 	}
 	
-	ALUOut outALU = ALU(RA, RB);
+	ALUOut outALU = ALU(regs->RA, regs->RB);
 	printf("ALU Result:\n Sum = 0x%X, Carry = %d\n", outALU.sum, outALU.carry);
 
-	C = outALU.carry; // Update the carry flag
+	control->C = outALU.carry; // Update the carry flag
 }

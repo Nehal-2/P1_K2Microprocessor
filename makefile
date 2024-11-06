@@ -1,9 +1,9 @@
 CC = gcc
-ASSEMBLER_SRC = assembler.c
-SIMULATOR_SRC = simulator.c
+ASSEMBLER_SRC = assembler/assembler.c
+SIMULATOR_SRC = Simulator/simulator.c
 ASSEMBLER_EXEC = assembler_exec
 SIMULATOR_EXEC = simulator_exec
-FILENAME ?= fibonacci.asm
+FILENAME ?= assembler/fibonacci.asm
 
 assemble: $(ASSEMBLER_SRC)
 	$(CC) $(ASSEMBLER_SRC) -o $(ASSEMBLER_EXEC)

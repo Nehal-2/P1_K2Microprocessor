@@ -1,5 +1,5 @@
 # Variables
-TASK ?= task1
+TASK ?= ~/P1/Simulator
 FILE ?= main
 SRC = $(TASK)/$(FILE).c
 EXEC = $(TASK)/$(FILE)
