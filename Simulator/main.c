@@ -6,7 +6,7 @@
 unsigned char IM[MEMORY_SIZE]; // Instruction memory
 unsigned char *PC; // Program counter
 
-// Control signals:
+/* // Control signals:
 bool J = 0;
 bool C = 0;
 bool D1 = 0;
@@ -21,7 +21,7 @@ unsigned char imm = 0;
 unsigned char RA = 0;
 unsigned char RB = 0;
 unsigned char RO = 0;
-
+*/
 typedef struct {
 	unsigned char sum;
 	bool carry;
@@ -29,8 +29,12 @@ typedef struct {
 
 typedef struct {
 	bool J, C, D1, D0, Sreg;
-	unsigned char S;
+	unsigned char S, imm;
 } ControlSignals;
+
+typedef struct {
+	unsigned char RA, RB, RO;
+} Registers;
 
 typedef struct {
 	bool EnA, EnB, EnO;
@@ -39,8 +43,8 @@ typedef struct {
 // Functions' declarations:
 void loadToIM(const char *binFile);
 unsigned char fetch();
-
-EnableSignals decodeInstr(bool D1, bool D0);
+void decodeInstr(unsigned char instr);
+EnableSignals demux(bool D1, bool D0);
 ALUOut ALU(unsigned char A, unsigned char B);
 int mux(int A, int B, bool Sreg);
 void execute();
@@ -68,13 +72,14 @@ int main() {
 
 	for (int i = 0; i < MEMORY_SIZE; i++) {
 		unsigned char currentInstr = *PC;
-		decode(currentInstr);
+		decodeInstr(currentInstr);
 		PC++;
 		//printf("Instruction %d: 0x%02X\n", i, IM[i]);
     	}	
 	
 	return 0;
 }
+
 void loadToIM(const char *binFile) {
 	FILE *file = fopen(binFile, "rb");
 	if (file == NULL) {
@@ -104,7 +109,7 @@ unsigned char fetch() {
 
 	if (J) {
 		PC = IM + imm;
-	} else if (JC && C) {
+	} else if (J && C) {
 		PC = IM + imm;
 	} else {
 		PC++;
@@ -112,10 +117,8 @@ unsigned char fetch() {
 
 	return instr;
 }
-
-//EnableSignals decode(bool D1, bool D0) {
 	
-void decode(unsigned char instr) {
+void decodeInstr(unsigned char instr) {
 
 	J = (instr & 0x80) ? 1 : 0;
 	C = (instr & 0x40) ? 1 : 0;
@@ -128,4 +131,91 @@ void decode(unsigned char instr) {
 	printf("Control Signals:\n");
     	printf("J: %d, C: %d, D1: %d, D0: %d, Sreg: %d, S: 0x%X\n",
            J, C, D1, D0, Sreg, S);
+}
+
+EnableSignals demux(bool D1, bool D0) {
+	EnableSignals enSignals;
+	enSignals.EnA = D1 && D0;
+	enSignals.EnB = D1 && !D0;
+	enSignals.EnO = !D1 && D0;
+
+	return enSignals;
+}
+
+ALUOut ALU(unsigned char RA, unsigned char RB) {
+	ALUOut output;
+	unsigned short result = 0;
+	int op = 0; 
+	switch (op) {
+		case 0: //RA = RA + RB
+			result = RA + RB;
+			output.sum = result & 0xFF; // Mask to 8 bits
+			output.carry = (result >> 8) & 0x1; // Move carry to be the 9th bit
+			break;
+		case 1: // RB = RA + RB
+			result = RA + RB;
+			output.sum = result & 0xFF; // Mask to 8 bits
+			output.carry = (result >> 8) & 0x1; // Move carry to be the 9th bit
+			break;
+		case 2: // RA = RA - RB
+			result = RA - RB;
+			output.sum = result & 0xFF; // Mask to 8 bits
+			output.carry = (result > RA) ? 1 : 0;
+			break; 
+		case 3: // RB = RA - RB
+			result = RA - RB;
+			output.sum = result & 0xFF; // Mask to 8 bits
+			output.carry = (result > RA) ? 1 : 0;
+			break;
+		case 4: // RO = RA
+			output.sum = RA;
+			output.carry = 0;
+			break;
+		case 5: // RA = imm
+			output.sum = imm;
+			output.carry = 0;
+			break;
+		case 6: // RB = imm
+			output.sum = imm;
+			output.carry = 0;
+			break;
+		case 7: // JC = imm
+			output.sum = 0;
+			output.carry = 0;
+			break;
+		case 8: // J = imm
+			output.sum = 0;
+			output.carry = 0;
+			break;
+	}
+
+		return output;
+}
+
+int mux(int A, int B, bool Sreg) {
+	return Sreg ? B : A;
+}
+
+void execute() {
+	unsigned char temp = mux(ALU(RA, RB).sum, imm, Sreg);
+	EnableSignals enSignals = demux(D1, D0);
+	
+	// Update registers:
+	if (enSignals.EnA) {
+		RA = temp;
+		printf("0x%X is loaded into RA\n", RA);
+	}
+	if (enSignals.EnB) {
+		RB = temp;
+		printf("0x%X is loaded into RB\n", RB);
+	}
+	if (enSignals.EnO) {
+		RO = RA;
+		printf("0x%X is loaded into RO)\n", RO);
+	}
+	
+	ALUOut outALU = ALU(RA, RB);
+	printf("ALU Result:\n Sum = 0x%X, Carry = %d\n", outALU.sum, outALU.carry);
+
+	C = outALU.carry; // Update the carry flag
 }
