@@ -178,14 +178,7 @@ void deocdeInstr(unsigned char instr, ControlSignals *control) {
 
 DecodeInstr decodeInstr(unsigned char instr) {
 	DecodeInstr decoded;
-	int J = (instr & 0x80) ? 1 : 0;
-	int C = (instr & 0x40) ? 1 : 0;
-	int D1 = (instr & 0x20) ? 1 : 0;
-	int D0 = (instr & 0x10) ? 1 : 0;
-	int Sreg = (instr & 0x08) ? 1 : 0;
-	int S = (instr & 0x04) ? 1 : 0;
-	int imm = instr & 0x07;
-/*	// Different method
+	
 	int J = (instr >> 7) & 0x01;
 	int C = (instr >> 6) & 0x01;
 	int D1 = (instr >> 5) & 0x01;
@@ -193,7 +186,7 @@ DecodeInstr decodeInstr(unsigned char instr) {
 	int Sreg = (instr >> 3) & 0x01;
 	int S = (instr >> 2) & 0x01;
 	int imm = instr & 0x07;
-*/	
+	
 	// Default
 	decoded.jump_condition = 0;
 	decoded.reg_address = NULL;
@@ -235,9 +228,13 @@ EnableSignals demux(bool D1, bool D0) {
 	return enSignals;
 }
 
-ALUOut ALU(unsigned char RA, unsigned char RB) {
+ALUOut ALU(unsigned char RA, unsigned char RB, ControSignals *control) {
 	ALUOut output;
-	unsigned short result = RA + RB;
+	if (control->S == 1) {
+		unsigned short result = RA - RB;
+	else {
+		unsigned short result = RA + RB;
+	}
 	output.sum = result & 0xFF; // Mask to 8 bits
 	output.carry = (result >> 8) & 0x1; // Extract carry
 
