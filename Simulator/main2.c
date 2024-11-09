@@ -18,12 +18,12 @@ typedef struct {
 	int custom_input;
 	int Sreg;
 } DecodeInstr;
-/*
+
 typedef struct {
 	bool J, C, D1, D0, Sreg, S;
 	unsigned char imm;
 } ControlSignals;
-*/
+
 typedef struct {
 	unsigned char RA, RB, RO;
 } Registers;
@@ -70,6 +70,7 @@ int main() {
 		unsigned char currentInstr = fetch(&control, &regs);
 		DecodeInstr decoded = decodeInstr(currentInstr);
 
+		printf("Instr: 0b%08b\n", bytes[i]);
 		printf("Jump Condition: %d\n", decoded.jump_condition);
    		 printf("Register Address: %s\n", decoded.reg_address ? decoded.reg_address : "None");
    		printf("ALU Operation: %s\n", decoded.alu_op);
@@ -112,6 +113,8 @@ void loadToIM(const char *binFile) {
 
 	while (fread(&chByte, sizeof(unsigned char), 1, file) == 1 
 	&& i < MEMORY_SIZE) {
+		IM[i++] = chByte;
+	}
 	/*
 		IM[i] = 0;
 		for (int iBit = 0; iBit < 8; iBit++) {
@@ -122,7 +125,7 @@ void loadToIM(const char *binFile) {
 		i++;
 	}
 	fclose(file);
-*/
+
 		IM[i] = chByte;
 		for (int iBit = 0; iBit < 8; iBit++) {
 			if (IM[i] == '1') {
@@ -131,18 +134,58 @@ void loadToIM(const char *binFile) {
 		}
 		//IM[i] = chByte;
 		i++;
-	}
+	}*/
 	fclose(file);
 }
 
 unsigned char fetch(ControlSignals *control, Registers *regs) {
-	unsigned char instr = *PC;
+	unsigned char instr = *PC;	
+	control->J = (instr >> 7) & 0x01;
+	control->C = (instr >> 6) & 0x01;
+	control->D1 = (instr >> 5) & 0x01;
+	control->D0 = (instr >> 4) & 0x01;
+	control->Sreg = (instr >> 3) & 0x01;
+	control->S = (instr >> 2) & 0x01;
+	control->imm = instr & 0x07;
+	
 	return instr;
 }
-	
+/* Previous attempt of decoding
+void deocdeInstr(unsigned char instr, ControlSignals *control) {
+
+	control->J = (instr & 0x80) ? 1 : 0;
+	control->C = (instr & 0x40) ? 1 : 0;
+	control->D1 = (instr & 0x20) ? 1 : 0;
+	control->D0 = (instr & 0x10) ? 1 : 0;
+	control->Sreg = (instr & 0x08) ? 1 : 0;
+	control->S = (instr & 0x04) ? 1 : 0;
+
+	control->imm = instr & 0x03; // Clear imm at the beginning of each instruction
+
+	// Check if the instruction requires the 6th bit as S-flag or imm[2]
+	if (control->Sreg) { // If Sreg = 1, treat the 6th bit as imm[2]
+		control->imm = instr & 0x07;
+	} else { // If Sreg != 1, treat the 6th bit as the S flag
+		control->S = (instr & 0x04) ? 1 : 0;
+		control->imm = instr & 0x03;
+	}
+	printf("Control Signals:\n");
+    	printf("J: %d, C: %d, D1: %d, D0: %d, Sreg: %d, S: %d, Imm:0x%02X\n"
+	,control->J, control->C, control->D1, control->D0, control->Sreg, 
+	control->S, control->imm);
+	} */  // End of prev attempt
+
+
 DecodeInstr decodeInstr(unsigned char instr) {
 	DecodeInstr decoded;
-
+	int J = (instr & 0x80) ? 1 : 0;
+	int C = (instr & 0x40) ? 1 : 0;
+	int D1 = (instr & 0x20) ? 1 : 0;
+	int D0 = (instr & 0x10) ? 1 : 0;
+	int Sreg = (instr & 0x08) ? 1 : 0;
+	int S = (instr & 0x04) ? 1 : 0;
+	int imm = instr & 0x07;
+/*	// Different method
 	int J = (instr >> 7) & 0x01;
 	int C = (instr >> 6) & 0x01;
 	int D1 = (instr >> 5) & 0x01;
@@ -150,7 +193,7 @@ DecodeInstr decodeInstr(unsigned char instr) {
 	int Sreg = (instr >> 3) & 0x01;
 	int S = (instr >> 2) & 0x01;
 	int imm = instr & 0x07;
-	
+*/	
 	// Default
 	decoded.jump_condition = 0;
 	decoded.reg_address = NULL;
@@ -177,35 +220,12 @@ DecodeInstr decodeInstr(unsigned char instr) {
 	if (S == 0) {
 		decoded.alu_op = "ADD";
 	} else {
-		decode.alu_op = "SUB";
+		decoded.alu_op = "SUB";
 	}
 
 	return decoded;
 }
 
-/*
-	control->J = (instr & 0x80) ? 1 : 0;
-	control->C = (instr & 0x40) ? 1 : 0;
-	control->D1 = (instr & 0x20) ? 1 : 0;
-	control->D0 = (instr & 0x10) ? 1 : 0;
-	control->Sreg = (instr & 0x08) ? 1 : 0;
-	control->S = (instr & 0x04) ? 1 : 0;
-
-	control->imm = instr & 0x03; // Clear imm at the beginning of each instruction
-/*
-	// Check if the instruction requires the 6th bit as S-flag or imm[2]
-	if (control->Sreg) { // If Sreg = 1, treat the 6th bit as imm[2]
-		control->imm = instr & 0x07;
-	} else { // If Sreg != 1, treat the 6th bit as the S flag
-		control->S = (instr & 0x04) ? 1 : 0;
-		control->imm = instr & 0x03;
-	}
-	printf("Control Signals:\n");
-    	printf("J: %d, C: %d, D1: %d, D0: %d, Sreg: %d, S: %d, Imm:0x%02X\n"
-	,control->J, control->C, control->D1, control->D0, control->Sreg, 
-	control->S, control->imm);
-	} */  // End of prev attempt
-/*
 EnableSignals demux(bool D1, bool D0) {
 	EnableSignals enSignals;
 	enSignals.EnA = D1 && D0;
@@ -214,7 +234,7 @@ EnableSignals demux(bool D1, bool D0) {
 
 	return enSignals;
 }
-*/
+
 ALUOut ALU(unsigned char RA, unsigned char RB) {
 	ALUOut output;
 	unsigned short result = RA + RB;
