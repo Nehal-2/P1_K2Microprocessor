@@ -8,11 +8,11 @@
 #define MEMORY_SIZE 16 // Instruction memory size: 2^(4 bits)
 #define MAX_REG_VALUE 15 // Maximum value for a 4-bit register
 
-int main() {
+int main(int argc, char *argv[]) {
+	/* // Taking input from a test .bin file:
 	FILE *testBinFile;
 	char mode;
 
-	// Taking input from a test .bin file:
     	testBinFile = fopen("testBinFile.bin", "wb");
 
     	if (testBinFile == NULL) {
@@ -27,7 +27,14 @@ int main() {
     	fclose(testBinFile);
 
     	loadToIM("testBinFile.bin");
+	*/
+	if (argc != 2) {
+		fprintf(stderr, "Usage: %s <filename.bin>\n", argv[0]);
+		return 1;
+	}
+	loadToIM(argv[1]);
     	PC = IM;
+	char mode;
 
     	ControlSignals control = {0};
     	Registers regs = {0};
