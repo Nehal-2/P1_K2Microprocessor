@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     }
 
     char output_filename[256];
-    snprintf(output_filename, sizeof(output_filename), "%s.bin", argv[1]);
+    snprintf(output_filename, sizeof(output_filename), "%.*s.bin",(int)(strchr(argv[1], '.') - argv[1]), argv[1]);
 
     assemble(argv[1], output_filename);
 
